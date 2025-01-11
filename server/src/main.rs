@@ -90,6 +90,7 @@ async fn rm(units: Vec<Unit>) -> Result<(), io::Error> {
 }
 
 pub async fn ls(root: PathBuf) -> Result<Vec<Unit>, io::Error> {
+    let root = ROOT.join(root);
     let mut dir = fs::read_dir(&root).await?;
     let mut paths = Vec::new();
     while let Some(x) = dir.next_entry().await? {

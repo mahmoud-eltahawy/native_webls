@@ -1,8 +1,8 @@
 use std::{path::PathBuf, str::FromStr};
 
-use common::{Action, Unit};
+use common::{Action, Unit, UnitKind};
 use iced::{
-    widget::{column, Button},
+    widget::{row, Button, Column, Row, Text},
     Element, Task,
 };
 
@@ -58,9 +58,7 @@ impl App {
     }
 
     fn view(&self) -> Element<Message> {
-        let ls = Button::new("ls /home/eltahawy").on_press(Message::Action(Action::Ls(
-            PathBuf::from_str("/home/eltahawy").unwrap(),
-        )));
+        let ls = Button::new("ls home").on_press(Message::Action(Action::Ls(PathBuf::new())));
         let rm = Button::new("rm /home/eltahawy/.bash_history").on_press(Message::Action(
             Action::Rm(vec![Unit {
                 path: PathBuf::from_str("/home/eltahawy/.bash_profile").unwrap(),
@@ -82,6 +80,18 @@ impl App {
         let mp4 = Button::new("mp4 /home/eltahawy/record.mkv").on_press(Message::Action(
             Action::Mp4(vec![PathBuf::from_str("/home/eltahawy/record.mkv").unwrap()]),
         ));
-        column![ls, rm, mv, cp, mp4].into()
+
+        let mut units = Row::new().spacing(10);
+        for unit in self.units.iter() {
+            let button = Button::new(Text::new(unit.name())).on_press_maybe(
+                matches!(unit.kind, UnitKind::Dirctory)
+                    .then_some(Message::Action(Action::Ls(unit.path.clone()))),
+            );
+            units = units.push(button);
+        }
+        row![ls, rm, mv, cp, mp4, units.wrap()]
+            .spacing(5)
+            .wrap()
+            .into()
     }
 }

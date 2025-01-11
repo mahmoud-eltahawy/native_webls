@@ -49,6 +49,12 @@ pub struct Unit {
     pub kind: UnitKind,
 }
 
+impl Unit {
+    pub fn name(&self) -> String {
+        self.path.file_name().unwrap().to_str().unwrap().to_string()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum UnitKind {
     Dirctory,
