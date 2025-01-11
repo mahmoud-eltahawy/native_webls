@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use common::{Action, ActionResult, Unit, LAST, PORT};
+use common::{Action, ActionResult, Bytes, Unit, LAST, PORT};
 use tokio::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,

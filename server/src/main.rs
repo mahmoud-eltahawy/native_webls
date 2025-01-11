@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use common::{Action, ActionResult, Unit, UnitKind, LAST, PORT};
+use common::{Action, ActionResult, Bytes, Unit, UnitKind, LAST, PORT};
 use tokio::{
     fs::{self, remove_dir_all, remove_file},
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},

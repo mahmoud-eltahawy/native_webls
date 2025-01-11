@@ -1,9 +1,15 @@
 use ciborium::{de::from_reader, ser::into_writer};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub const LAST: u8 = b'\n';
 pub const PORT: u16 = 7720;
+
+trait Message: Serialize + DeserializeOwned {}
+pub trait Bytes {
+    fn bytes(&self) -> Vec<u8>;
+    fn from_bytes(data: Vec<u8>) -> Self;
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Action {
@@ -12,16 +18,17 @@ pub enum Action {
     Mv { from: Vec<PathBuf>, to: PathBuf },
     Cp { from: Vec<PathBuf>, to: PathBuf },
 }
+impl Message for Action {}
 
-impl Action {
-    pub fn bytes(&self) -> Vec<u8> {
+impl<T: Message> Bytes for T {
+    fn bytes(&self) -> Vec<u8> {
         let mut encoded = Vec::new();
         into_writer(&self, &mut encoded).unwrap();
         encoded.push(LAST);
         encoded
     }
 
-    pub fn from_bytes(mut data: Vec<u8>) -> Self {
+    fn from_bytes(mut data: Vec<u8>) -> Self {
         let _ = data.pop();
         let decoded: Self = from_reader(&data[..]).unwrap();
         decoded
@@ -35,21 +42,7 @@ pub enum ActionResult {
     Mv,
     Cp,
 }
-
-impl ActionResult {
-    pub fn bytes(&self) -> Vec<u8> {
-        let mut encoded = Vec::new();
-        into_writer(&self, &mut encoded).unwrap();
-        encoded.push(LAST);
-        encoded
-    }
-
-    pub fn from_bytes(mut data: Vec<u8>) -> Self {
-        let _ = data.pop();
-        let decoded: Self = from_reader(&data[..]).unwrap();
-        decoded
-    }
-}
+impl Message for ActionResult {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Unit {
