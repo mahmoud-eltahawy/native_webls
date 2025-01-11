@@ -48,7 +48,8 @@ impl App {
                 }
             },
             Message::Ls(units) => {
-                if let Some(units) = units {
+                if let Some(mut units) = units {
+                    units.sort_by_key(|x| (x.kind.clone(), x.name()));
                     self.units = units;
                 }
                 Task::none()
@@ -80,24 +81,28 @@ impl App {
             Action::Mp4(vec![PathBuf::from_str("/home/eltahawy/record.mkv").unwrap()]),
         ));
 
-        let mut units = Row::new().spacing(10);
-        for unit in self.units.iter() {
-            let path = match unit.kind {
-                UnitKind::Dirctory => "../public/directory.png",
-                UnitKind::Video => "../public/video.png",
-                UnitKind::Audio => "../public/audio.png",
-                UnitKind::File => "../public/file.png",
-            };
-            let icon = Element::from(image(path).width(40).height(40)).explain(Color::BLACK);
-            let button = Button::new(column![icon, Text::new(unit.name())]).on_press_maybe(
-                matches!(unit.kind, UnitKind::Dirctory)
-                    .then_some(Message::Action(Action::Ls(unit.path.clone()))),
-            );
-            units = units.push(button);
-        }
+        let units = self
+            .units
+            .iter()
+            .fold(Row::new().spacing(10), |acc, x| acc.push(unit_element(x)));
         row![ls, rm, mv, cp, mp4, units.wrap()]
             .spacing(5)
             .wrap()
             .into()
     }
+}
+
+fn unit_element(unit: &Unit) -> Button<'static, Message> {
+    let path = match unit.kind {
+        UnitKind::Dirctory => "../public/directory.png",
+        UnitKind::Video => "../public/video.png",
+        UnitKind::Audio => "../public/audio.png",
+        UnitKind::File => "../public/file.png",
+    };
+    let icon = Element::from(image(path).width(40).height(40)).explain(Color::BLACK);
+    let button = Button::new(column![icon, Text::new(unit.name())]).on_press_maybe(
+        matches!(unit.kind, UnitKind::Dirctory)
+            .then_some(Message::Action(Action::Ls(unit.path.clone()))),
+    );
+    button
 }
