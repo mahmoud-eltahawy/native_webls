@@ -31,7 +31,6 @@ async fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn std::error::
     let mut recieved = Vec::new();
     buf_reader.read_until(LAST, &mut recieved).await?;
     let action = Action::from_bytes(recieved);
-    println!("performing action :\n{:#?}", action);
     let result = action.activate().await?;
     let mut stream = buf_reader.into_inner();
     stream.write_all(&result.bytes()).await?;

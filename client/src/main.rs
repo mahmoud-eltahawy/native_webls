@@ -2,8 +2,8 @@ use std::{path::PathBuf, str::FromStr};
 
 use common::{Action, Unit, UnitKind};
 use iced::{
-    widget::{row, Button, Column, Row, Text},
-    Element, Task,
+    widget::{column, image, row, Button, Row, Text},
+    Color, Element, Task,
 };
 
 mod action;
@@ -49,7 +49,6 @@ impl App {
             },
             Message::Ls(units) => {
                 if let Some(units) = units {
-                    println!("we got this : {:#?}", units);
                     self.units = units;
                 }
                 Task::none()
@@ -83,7 +82,14 @@ impl App {
 
         let mut units = Row::new().spacing(10);
         for unit in self.units.iter() {
-            let button = Button::new(Text::new(unit.name())).on_press_maybe(
+            let path = match unit.kind {
+                UnitKind::Dirctory => "../public/directory.png",
+                UnitKind::Video => "../public/video.png",
+                UnitKind::Audio => "../public/audio.png",
+                UnitKind::File => "../public/file.png",
+            };
+            let icon = Element::from(image(path).width(40).height(40)).explain(Color::BLACK);
+            let button = Button::new(column![icon, Text::new(unit.name())]).on_press_maybe(
                 matches!(unit.kind, UnitKind::Dirctory)
                     .then_some(Message::Action(Action::Ls(unit.path.clone()))),
             );
