@@ -11,7 +11,7 @@ pub trait Bytes {
     fn from_bytes(data: Vec<u8>) -> Self;
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Action {
     Ls(PathBuf),
     Rm(Vec<Unit>),
