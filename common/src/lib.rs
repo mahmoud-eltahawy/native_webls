@@ -17,6 +17,7 @@ pub enum Action {
     Rm(Vec<Unit>),
     Mv { from: Vec<PathBuf>, to: PathBuf },
     Cp { from: Vec<PathBuf>, to: PathBuf },
+    Mp4(Vec<PathBuf>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

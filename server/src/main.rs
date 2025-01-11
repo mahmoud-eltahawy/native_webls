@@ -11,6 +11,7 @@ use tokio::{
     fs::{self, copy, remove_dir_all, remove_file},
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
+    process::Command,
     task::JoinSet,
 };
 
@@ -58,6 +59,10 @@ impl Activate for Action {
             }
             Action::Cp { from, to } => {
                 cp(from, to).await?;
+                Reaction::Fine
+            }
+            Action::Mp4(vec) => {
+                mp4_remux(vec).await?;
                 Reaction::Fine
             }
         };
@@ -142,5 +147,35 @@ async fn mv(from: Vec<PathBuf>, to: PathBuf) -> Result<(), io::Error> {
 pub async fn cut(from: PathBuf, to: PathBuf) -> Result<(), io::Error> {
     copy(&from, to).await?;
     remove_file(from).await?;
+    Ok(())
+}
+
+async fn mp4_remux(paths: Vec<PathBuf>) -> Result<(), io::Error> {
+    let mut set = JoinSet::new();
+    paths
+        .into_iter()
+        .map(|target| ROOT.join(target))
+        .map(any_to_mp4)
+        .for_each(|x| {
+            set.spawn(x);
+        });
+    while let Some(x) = set.join_next().await {
+        x??;
+    }
+    Ok(())
+}
+
+async fn any_to_mp4(from: PathBuf) -> Result<(), io::Error> {
+    let mut to = from.clone();
+    to.set_extension("mp4");
+    let _ = remove_file(to.clone()).await;
+    Command::new("ffmpeg")
+        .arg("-i")
+        .arg(from.clone())
+        .arg(to)
+        .spawn()?
+        .wait()
+        .await?;
+    let _ = remove_file(from).await;
     Ok(())
 }
