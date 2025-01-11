@@ -6,5 +6,5 @@ edition.workspace = true
 [dependencies]
 tokio = { workspace = true, features = ["full"] }
 common = { workspace = true }
-iced = "0.13.1"
+iced = {version = "0.13.1",features = ["tokio"]} 
 

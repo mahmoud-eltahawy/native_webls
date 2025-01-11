@@ -13,25 +13,48 @@ fn main() -> iced::Result {
 }
 
 #[derive(Debug, Clone, Default)]
-struct App;
+struct App {
+    units: Vec<Unit>,
+}
 
 #[derive(Debug, Clone)]
 enum Message {
     Action(Action),
+    Ls(Option<Vec<Unit>>),
 }
 
 impl App {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Action(action) => match action {
-                Action::Ls(path_buf) => println!("ls {:#?}", path_buf),
-                Action::Rm(vec) => println!("removing {:#?}", vec),
-                Action::Mv { from, to } => println!("moving from {:#?} to {:#?}", from, to),
-                Action::Cp { from, to } => println!("copy from {:#?} to {:#?}", from, to),
-                Action::Mp4(vec) => println!("remuxing {:#?}", vec),
+                Action::Ls(path_buf) => {
+                    Task::perform(action::ls(path_buf.clone()), |x| Message::Ls(x.ok()))
+                }
+                Action::Rm(vec) => {
+                    println!("removing {:#?}", vec);
+                    Task::none()
+                }
+                Action::Mv { from, to } => {
+                    println!("moving from {:#?} to {:#?}", from, to);
+                    Task::none()
+                }
+                Action::Cp { from, to } => {
+                    println!("copy from {:#?} to {:#?}", from, to);
+                    Task::none()
+                }
+                Action::Mp4(vec) => {
+                    println!("remuxing {:#?}", vec);
+                    Task::none()
+                }
             },
+            Message::Ls(units) => {
+                if let Some(units) = units {
+                    println!("we got this : {:#?}", units);
+                    self.units = units;
+                }
+                Task::none()
+            }
         }
-        Task::none()
     }
 
     fn view(&self) -> Element<Message> {
