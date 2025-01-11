@@ -18,7 +18,14 @@ pub enum Action {
     Mv { from: Vec<PathBuf>, to: PathBuf },
     Cp { from: Vec<PathBuf>, to: PathBuf },
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Reaction {
+    Ls(Vec<Unit>),
+    Fine,
+}
 impl Message for Action {}
+impl Message for Reaction {}
 
 impl<T: Message> Bytes for T {
     fn bytes(&self) -> Vec<u8> {
@@ -34,15 +41,6 @@ impl<T: Message> Bytes for T {
         decoded
     }
 }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum ActionResult {
-    Ls(Vec<Unit>),
-    Rm,
-    Mv,
-    Cp,
-}
-impl Message for ActionResult {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Unit {

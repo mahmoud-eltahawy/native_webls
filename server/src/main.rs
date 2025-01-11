@@ -3,13 +3,15 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     str::FromStr,
+    sync::LazyLock,
 };
 
-use common::{Action, ActionResult, Bytes, Unit, UnitKind, LAST, PORT};
+use common::{Action, Bytes, Reaction, Unit, UnitKind, LAST, PORT};
 use tokio::{
-    fs::{self, remove_dir_all, remove_file},
+    fs::{self, copy, remove_dir_all, remove_file},
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
+    task::JoinSet,
 };
 
 #[tokio::main]
@@ -36,32 +38,40 @@ async fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn std::error::
 }
 
 trait Activate {
-    async fn activate(&self) -> Result<ActionResult, io::Error>;
+    async fn activate(self) -> Result<Reaction, io::Error>;
 }
 
 impl Activate for Action {
-    async fn activate(&self) -> Result<ActionResult, io::Error> {
+    async fn activate(self) -> Result<Reaction, io::Error> {
         let result = match self {
             Action::Ls(path_buf) => {
                 let entries = ls(path_buf).await?;
-                ActionResult::Ls(entries)
+                Reaction::Ls(entries)
             }
             Action::Rm(vec) => {
                 rm(vec).await?;
-                ActionResult::Rm
+                Reaction::Fine
             }
-            Action::Mv { from, to } => ActionResult::Mv,
-            Action::Cp { from, to } => ActionResult::Cp,
+            Action::Mv { from, to } => {
+                mv(from, to).await?;
+                Reaction::Fine
+            }
+            Action::Cp { from, to } => {
+                cp(from, to).await?;
+                Reaction::Fine
+            }
         };
         Ok(result)
     }
 }
 
-async fn rm(bases: &[Unit]) -> Result<(), io::Error> {
-    let root = PathBuf::from_str("/home/eltahawy").unwrap();
-    for base in bases.iter() {
-        let path = root.join(base.path.clone());
-        match base.kind {
+static ROOT: LazyLock<PathBuf> = LazyLock::new(|| PathBuf::from_str("/home/eltahawy").unwrap());
+
+async fn rm(units: Vec<Unit>) -> Result<(), io::Error> {
+    for unit in units.into_iter() {
+        let Unit { path, kind } = unit;
+        let path = ROOT.join(path);
+        match kind {
             UnitKind::Dirctory => {
                 remove_dir_all(path).await?;
             }
@@ -74,7 +84,7 @@ async fn rm(bases: &[Unit]) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub async fn ls(root: &PathBuf) -> Result<Vec<Unit>, io::Error> {
+pub async fn ls(root: PathBuf) -> Result<Vec<Unit>, io::Error> {
     let mut dir = fs::read_dir(&root).await?;
     let mut paths = Vec::new();
     while let Some(x) = dir.next_entry().await? {
@@ -84,11 +94,53 @@ pub async fn ls(root: &PathBuf) -> Result<Vec<Unit>, io::Error> {
             UnitKind::File
         };
         let unit = Unit {
-            path: x.path().to_path_buf(),
+            path: x
+                .path()
+                .strip_prefix(ROOT.to_path_buf())
+                .unwrap()
+                .to_path_buf(),
             kind,
         };
         paths.push(unit);
     }
-
     Ok(paths)
+}
+
+async fn cp(from: Vec<PathBuf>, to: PathBuf) -> Result<(), io::Error> {
+    let to = ROOT.join(to);
+    let mut set = JoinSet::new();
+    for path in from.iter().map(|x| ROOT.join(x)) {
+        let name = path.file_name().unwrap().to_str().unwrap().to_string();
+        set.spawn(copy(path, to.join(name)));
+    }
+
+    while let Some(x) = set.join_next().await {
+        let _ = x??;
+    }
+
+    Ok(())
+}
+
+async fn mv(from: Vec<PathBuf>, to: PathBuf) -> Result<(), io::Error> {
+    let to = ROOT.join(to);
+    let mut set = JoinSet::new();
+    for base in from.into_iter().map(|x| ROOT.join(x)) {
+        let name = base
+            .file_name()
+            .and_then(|x| x.to_str())
+            .map(|x| x.to_string())
+            .unwrap();
+        set.spawn(cut(base, to.join(name)));
+    }
+
+    while let Some(x) = set.join_next().await {
+        x??;
+    }
+    Ok(())
+}
+
+pub async fn cut(from: PathBuf, to: PathBuf) -> Result<(), io::Error> {
+    copy(&from, to).await?;
+    remove_file(from).await?;
+    Ok(())
 }
