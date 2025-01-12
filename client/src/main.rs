@@ -19,7 +19,7 @@ fn main() -> iced::Result {
 
 #[derive(Debug, Clone, Default)]
 struct App {
-    units: Vec<Unit>,
+    units: Box<[Unit]>,
     selected: Vec<Unit>,
     shift: bool,
 }
@@ -63,7 +63,7 @@ impl App {
             Message::Ls(units) => {
                 if let Some(mut units) = units {
                     units.sort_by_key(|x| (x.kind.clone(), x.name()));
-                    self.units = units;
+                    self.units = units.into();
                 }
                 Task::none()
             }
