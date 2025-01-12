@@ -17,7 +17,7 @@ fn main() -> iced::Result {
         .run()
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 struct App {
     units: Box<[Unit]>,
     selected: Vec<Unit>,
