@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use common::{Action, Unit, UnitKind};
 use iced::{
@@ -19,8 +19,8 @@ fn main() -> iced::Result {
 
 #[derive(Debug, Default)]
 struct App {
-    units: Box<[Unit]>,
-    selected: Vec<Unit>,
+    units: Box<[Arc<Unit>]>,
+    selected: Vec<Arc<Unit>>,
     shift: bool,
 }
 
@@ -28,8 +28,8 @@ struct App {
 enum Message {
     Action(Action),
     Ls(Option<Vec<Unit>>),
-    Select(Unit),
-    UnSelect(Unit),
+    Select(Arc<Unit>),
+    UnSelect(Arc<Unit>),
     EventOccurred(Event),
 }
 
@@ -41,7 +41,7 @@ impl App {
         match message {
             Message::Action(action) => match action {
                 Action::Ls(path_buf) => {
-                    Task::perform(action::ls(path_buf.clone()), |x| Message::Ls(x.ok()))
+                    Task::perform(action::ls(path_buf), |x| Message::Ls(x.ok()))
                 }
                 Action::Rm(vec) => {
                     println!("removing {:#?}", vec);
@@ -63,7 +63,7 @@ impl App {
             Message::Ls(units) => {
                 if let Some(mut units) = units {
                     units.sort_by_key(|x| (x.kind.clone(), x.name()));
-                    self.units = units.into();
+                    self.units = units.into_iter().map(Arc::new).collect::<Vec<_>>().into();
                 }
                 Task::none()
             }
@@ -120,7 +120,7 @@ impl App {
         let units = self
             .units
             .iter()
-            .map(|x| UnitElement::new(x, self.selected.contains(x)))
+            .map(|x| UnitElement::new(x.clone(), self.selected.contains(x)))
             .fold(Row::new().spacing(10), |acc, x| acc.push(x.display()))
             .wrap();
 
@@ -129,7 +129,7 @@ impl App {
 }
 
 struct UnitElement {
-    unit: Unit,
+    unit: Arc<Unit>,
     selected: bool,
 }
 
@@ -144,11 +144,8 @@ macro_rules! dark_icon {
 }
 
 impl UnitElement {
-    fn new(unit: &Unit, selected: bool) -> Self {
-        Self {
-            unit: unit.clone(),
-            selected,
-        }
+    fn new(unit: Arc<Unit>, selected: bool) -> Self {
+        Self { unit, selected }
     }
     fn display(&self) -> Button<'static, Message> {
         let path = match self.unit.kind {
