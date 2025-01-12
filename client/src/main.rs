@@ -5,6 +5,7 @@ use iced::{
     event,
     keyboard::{self, Modifiers},
     widget::{column, image, row, Button, Row, Text},
+    Alignment::Center,
     Color, Element, Event, Subscription, Task,
 };
 
@@ -19,6 +20,7 @@ fn main() -> iced::Result {
 #[derive(Debug, Clone, Default)]
 struct App {
     units: Vec<Unit>,
+    selected: Vec<Unit>,
     shift: bool,
 }
 
@@ -26,6 +28,8 @@ struct App {
 enum Message {
     Action(Action),
     Ls(Option<Vec<Unit>>),
+    Select(Unit),
+    UnSelect(Unit),
     EventOccurred(Event),
 }
 
@@ -81,6 +85,14 @@ impl App {
                 }
                 Task::none()
             }
+            Message::Select(unit) => {
+                self.selected.push(unit);
+                Task::none()
+            }
+            Message::UnSelect(unit) => {
+                self.selected.retain(|x| *x != unit);
+                Task::none()
+            }
         }
     }
 
@@ -108,7 +120,7 @@ impl App {
         let units = self
             .units
             .iter()
-            .map(UnitElement::new)
+            .map(|x| UnitElement::new(x, self.selected.contains(x)))
             .fold(Row::new().spacing(10), |acc, x| acc.push(x.display()))
             .wrap();
 
@@ -132,10 +144,10 @@ macro_rules! dark_icon {
 }
 
 impl UnitElement {
-    fn new(unit: &Unit) -> Self {
+    fn new(unit: &Unit, selected: bool) -> Self {
         Self {
             unit: unit.clone(),
-            selected: false,
+            selected,
         }
     }
     fn display(&self) -> Button<'static, Message> {
@@ -146,10 +158,17 @@ impl UnitElement {
             UnitKind::File => dark_icon!(self.selected, "file.png"),
         };
         let icon = Element::from(image(path).width(40).height(40)).explain(Color::BLACK);
-        let button = Button::new(column![icon, Text::new(self.unit.name())]).on_press_maybe(
-            matches!(self.unit.kind, UnitKind::Dirctory)
-                .then_some(Message::Action(Action::Ls(self.unit.path.clone()))),
-        );
+        let button = Button::new(column![icon, Text::new(self.unit.name())].align_x(Center))
+            .on_press(if self.selected {
+                Message::UnSelect(self.unit.clone())
+            } else {
+                Message::Select(self.unit.clone())
+            });
+        //TODO : on double click send the following message
+        // .on_press_maybe(
+        //     matches!(self.unit.kind, UnitKind::Dirctory)
+        //         .then_some(Message::Action(Action::Ls(self.unit.path.clone()))),
+        // );
         button
     }
 }
