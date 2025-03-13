@@ -2,11 +2,10 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use common::{Action, Unit, UnitKind};
 use iced::{
-    event,
-    keyboard::{self, Modifiers},
-    widget::{column, image, row, Button, Row, Text},
     Alignment::Center,
-    Color, Element, Event, Subscription, Task,
+    Color, Element, Event, Subscription, Task, event,
+    keyboard::{self, Key, Modifiers, key::Named},
+    widget::{Button, Row, Text, column, image, row},
 };
 
 mod action;
@@ -21,13 +20,13 @@ fn main() -> iced::Result {
 struct App {
     units: Box<[Arc<Unit>]>,
     selected: Vec<Arc<Unit>>,
-    shift: bool,
+    select_mode: bool,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     Action(Action),
-    Ls(Option<Vec<Unit>>),
+    Ls(Vec<Unit>),
     Select(Arc<Unit>),
     UnSelect(Arc<Unit>),
     EventOccurred(Event),
@@ -41,7 +40,7 @@ impl App {
         match message {
             Message::Action(action) => match action {
                 Action::Ls(path_buf) => {
-                    Task::perform(action::ls(path_buf), |x| Message::Ls(x.ok()))
+                    Task::perform(action::ls(path_buf), |x| Message::Ls(x.unwrap_or_default()))
                 }
                 Action::Rm(vec) => {
                     println!("removing {:#?}", vec);
@@ -60,18 +59,27 @@ impl App {
                     Task::none()
                 }
             },
-            Message::Ls(units) => {
-                if let Some(mut units) = units {
-                    units.sort_by_key(|x| (x.kind.clone(), x.name()));
-                    self.units = units.into_iter().map(Arc::new).collect::<Vec<_>>().into();
-                }
+            Message::Ls(mut units) => {
+                units.sort_by_key(|x| (x.kind.clone(), x.name()));
+                self.units = units.into_iter().map(Arc::new).collect::<Vec<_>>().into();
                 Task::none()
             }
             Message::EventOccurred(event) => {
                 match event {
                     Event::Keyboard(event) => {
+                        match event {
+                            keyboard::Event::ModifiersChanged(Modifiers::SHIFT) => {
+                                self.select_mode = true;
+                            }
+                            keyboard::Event::KeyReleased {
+                                key: Key::Named(Named::Shift),
+                                ..
+                            } => {
+                                self.select_mode = false;
+                            }
+                            _ => (),
+                        };
                         println!("{:#?}", event);
-                        self.shift = event == keyboard::Event::ModifiersChanged(Modifiers::SHIFT);
                     }
                     Event::Mouse(event) => {
                         println!("{:#?}", event);
@@ -120,7 +128,7 @@ impl App {
         let units = self
             .units
             .iter()
-            .map(|x| UnitElement::new(x.clone(), self.selected.contains(x)))
+            .map(|x| UnitElement::new(x.clone(), self.selected.contains(x), self.select_mode))
             .fold(Row::new().spacing(10), |acc, x| acc.push(x.display()))
             .wrap();
 
@@ -131,6 +139,7 @@ impl App {
 struct UnitElement {
     unit: Arc<Unit>,
     selected: bool,
+    select_mode: bool,
 }
 
 macro_rules! dark_icon {
@@ -144,8 +153,12 @@ macro_rules! dark_icon {
 }
 
 impl UnitElement {
-    fn new(unit: Arc<Unit>, selected: bool) -> Self {
-        Self { unit, selected }
+    fn new(unit: Arc<Unit>, selected: bool, select_mode: bool) -> Self {
+        Self {
+            unit,
+            selected,
+            select_mode,
+        }
     }
     fn display(&self) -> Button<'static, Message> {
         let path = match self.unit.kind {
@@ -156,10 +169,14 @@ impl UnitElement {
         };
         let icon = Element::from(image(path).width(40).height(40)).explain(Color::BLACK);
         let button = Button::new(column![icon, Text::new(self.unit.name())].align_x(Center))
-            .on_press(if self.selected {
-                Message::UnSelect(self.unit.clone())
+            .on_press(if self.select_mode {
+                if self.selected {
+                    Message::UnSelect(self.unit.clone())
+                } else {
+                    Message::Select(self.unit.clone())
+                }
             } else {
-                Message::Select(self.unit.clone())
+                Message::Action(Action::Ls(self.unit.path.clone()))
             });
         //TODO : on double click send the following message
         // .on_press_maybe(
