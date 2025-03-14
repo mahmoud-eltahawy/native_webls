@@ -41,6 +41,7 @@ impl App {
         match message {
             Message::Action(action) => match action {
                 Action::Ls(path_buf) => {
+                    self.selected.clear();
                     Task::perform(action::ls(path_buf), |x| Message::Ls(x.unwrap_or_default()))
                 }
                 Action::Rm(vec) => {
