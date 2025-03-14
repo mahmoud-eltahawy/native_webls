@@ -20,7 +20,7 @@ fn main() -> iced::Result {
 #[derive(Debug, Default)]
 struct App {
     units: Box<[Arc<Unit>]>,
-    selected: Vec<Arc<Unit>>,
+    selected: Vec<usize>,
     select_mode: bool,
 }
 
@@ -33,8 +33,8 @@ enum Message {
 }
 #[derive(Debug, Clone)]
 enum Order {
-    Select(Arc<Unit>),
-    UnSelect(Arc<Unit>),
+    Select(usize),
+    UnSelect(usize),
 }
 
 impl App {
@@ -146,6 +146,7 @@ impl App {
 
         struct UnitElement {
             unit: Arc<Unit>,
+            index: usize,
             selected: bool,
             select_mode: bool,
         }
@@ -163,9 +164,11 @@ impl App {
         let units = self
             .units
             .iter()
-            .map(|x| UnitElement {
+            .enumerate()
+            .map(|(i, x)| UnitElement {
                 unit: x.clone(),
-                selected: self.selected.contains(x),
+                index: i,
+                selected: self.selected.contains(&i),
                 select_mode: self.select_mode,
             })
             .fold(Row::new(), |row, e| {
@@ -185,9 +188,9 @@ impl App {
                     let block = column![icon, title].align_x(Center);
                     let on_press = if e.select_mode {
                         Some(if e.selected {
-                            Message::Order(Order::UnSelect(e.unit.clone()))
+                            Message::Order(Order::UnSelect(e.index))
                         } else {
-                            Message::Order(Order::Select(e.unit.clone()))
+                            Message::Order(Order::Select(e.index))
                         })
                     } else if matches!(e.unit.kind, UnitKind::Dirctory) {
                         Some(Message::RemoteAction(Action::Ls(e.unit.path.clone())))
