@@ -6,6 +6,7 @@ use iced::{
     Color, Element, Event, Subscription, Task, event,
     keyboard::{self, Key, Modifiers, key::Named},
     widget::{Button, Row, Text, column, image, row},
+    window,
 };
 
 mod action;
@@ -64,35 +65,43 @@ impl App {
                 self.units = units.into_iter().map(Arc::new).collect::<Vec<_>>().into();
                 Task::none()
             }
-            Message::EventOccurred(event) => {
-                match event {
-                    Event::Keyboard(event) => {
-                        match event {
-                            keyboard::Event::ModifiersChanged(Modifiers::SHIFT) => {
-                                self.select_mode = true;
-                            }
-                            keyboard::Event::KeyReleased {
-                                key: Key::Named(Named::Shift),
-                                ..
-                            } => {
-                                self.select_mode = false;
-                            }
-                            _ => (),
-                        };
-                        println!("{:#?}", event);
-                    }
-                    Event::Mouse(event) => {
-                        println!("{:#?}", event);
-                    }
-                    Event::Window(event) => {
-                        println!("{:#?}", event);
-                    }
-                    Event::Touch(event) => {
-                        println!("{:#?}", event);
+            Message::EventOccurred(event) => match event {
+                Event::Keyboard(event) => {
+                    match event {
+                        keyboard::Event::ModifiersChanged(Modifiers::SHIFT) => {
+                            self.select_mode = true;
+                        }
+                        keyboard::Event::KeyReleased {
+                            key: Key::Named(Named::Shift),
+                            ..
+                        } => {
+                            self.select_mode = false;
+                        }
+                        _ => (),
+                    };
+                    println!("{:#?}", event);
+                    Task::none()
+                }
+                Event::Mouse(event) => {
+                    println!("{:#?}", event);
+                    Task::none()
+                }
+                Event::Window(event) => {
+                    println!("{:#?}", event);
+                    match event {
+                        window::Event::Opened { .. } => {
+                            Task::perform(action::ls(PathBuf::new()), |x| {
+                                Message::Ls(x.unwrap_or_default())
+                            })
+                        }
+                        _ => Task::none(),
                     }
                 }
-                Task::none()
-            }
+                Event::Touch(event) => {
+                    println!("{:#?}", event);
+                    Task::none()
+                }
+            },
             Message::Select(unit) => {
                 self.selected.push(unit);
                 Task::none()
@@ -105,7 +114,7 @@ impl App {
     }
 
     fn view(&self) -> Element<Message> {
-        let ls = Button::new("ls home").on_press(Message::Action(Action::Ls(PathBuf::new())));
+        let ls = Button::new("Home").on_press(Message::Action(Action::Ls(PathBuf::new())));
         let rm =
             Button::new("rm .bash_history").on_press(Message::Action(Action::Rm(vec![Unit {
                 path: PathBuf::from_str(".bash_profile").unwrap(),
@@ -125,64 +134,62 @@ impl App {
 
         let nav_bar = row![ls, rm, mv, cp, mp4].spacing(5).wrap();
 
+        struct UnitElement {
+            unit: Arc<Unit>,
+            selected: bool,
+            select_mode: bool,
+        }
+
+        macro_rules! dark_icon {
+            ($is_it:expr,$name:literal) => {
+                if $is_it {
+                    concat!("../public/dark/", $name)
+                } else {
+                    concat!("../public/", $name)
+                }
+            };
+        }
+
         let units = self
             .units
             .iter()
-            .map(|x| UnitElement::new(x.clone(), self.selected.contains(x), self.select_mode))
-            .fold(Row::new().spacing(10), |acc, x| acc.push(x.display()))
+            .map(|x| UnitElement {
+                unit: x.clone(),
+                selected: self.selected.contains(x),
+                select_mode: self.select_mode,
+            })
+            .fold(Row::new(), |row, e| {
+                row.push({
+                    let icon = Element::from(
+                        image(match e.unit.kind {
+                            UnitKind::Dirctory => dark_icon!(e.selected, "directory.png"),
+                            UnitKind::Video => dark_icon!(e.selected, "video.png"),
+                            UnitKind::Audio => dark_icon!(e.selected, "audio.png"),
+                            UnitKind::File => dark_icon!(e.selected, "file.png"),
+                        })
+                        .width(40)
+                        .height(40),
+                    )
+                    .explain(Color::BLACK);
+                    let title = Text::new(e.unit.name());
+                    let block = column![icon, title].align_x(Center);
+                    let on_press = if e.select_mode {
+                        Some(if e.selected {
+                            Message::UnSelect(e.unit.clone())
+                        } else {
+                            Message::Select(e.unit.clone())
+                        })
+                    } else if matches!(e.unit.kind, UnitKind::Dirctory) {
+                        Some(Message::Action(Action::Ls(e.unit.path.clone())))
+                    } else {
+                        None
+                    };
+                    Button::new(block).on_press_maybe(on_press)
+                })
+            })
+            .spacing(10)
             .wrap();
 
         column![nav_bar, units].spacing(20).into()
-    }
-}
-
-struct UnitElement {
-    unit: Arc<Unit>,
-    selected: bool,
-    select_mode: bool,
-}
-
-macro_rules! dark_icon {
-    ($is_it:expr,$name:literal) => {
-        if $is_it {
-            concat!("../public/dark/", $name)
-        } else {
-            concat!("../public/", $name)
-        }
-    };
-}
-
-impl UnitElement {
-    fn new(unit: Arc<Unit>, selected: bool, select_mode: bool) -> Self {
-        Self {
-            unit,
-            selected,
-            select_mode,
-        }
-    }
-    fn display(&self) -> Button<'static, Message> {
-        let path = match self.unit.kind {
-            UnitKind::Dirctory => dark_icon!(self.selected, "directory.png"),
-            UnitKind::Video => dark_icon!(self.selected, "video.png"),
-            UnitKind::Audio => dark_icon!(self.selected, "audio.png"),
-            UnitKind::File => dark_icon!(self.selected, "file.png"),
-        };
-        let icon = Element::from(image(path).width(40).height(40)).explain(Color::BLACK);
-        let button = Button::new(column![icon, Text::new(self.unit.name())].align_x(Center))
-            .on_press(if self.select_mode {
-                if self.selected {
-                    Message::UnSelect(self.unit.clone())
-                } else {
-                    Message::Select(self.unit.clone())
-                }
-            } else {
-                Message::Action(Action::Ls(self.unit.path.clone()))
-            });
-        //TODO : on double click send the following message
-        // .on_press_maybe(
-        //     matches!(self.unit.kind, UnitKind::Dirctory)
-        //         .then_some(Message::Action(Action::Ls(self.unit.path.clone()))),
-        // );
-        button
     }
 }
