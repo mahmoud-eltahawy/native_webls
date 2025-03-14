@@ -26,11 +26,15 @@ struct App {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Action(Action),
-    Ls(Vec<Unit>),
+    RemoteAction(Action),
+    Order(Order),
+    LsValue(Vec<Unit>),
+    EventOccurred(Event),
+}
+#[derive(Debug, Clone)]
+enum Order {
     Select(Arc<Unit>),
     UnSelect(Arc<Unit>),
-    EventOccurred(Event),
 }
 
 impl App {
@@ -39,10 +43,12 @@ impl App {
     }
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Action(action) => match action {
+            Message::RemoteAction(action) => match action {
                 Action::Ls(path_buf) => {
                     self.selected.clear();
-                    Task::perform(action::ls(path_buf), |x| Message::Ls(x.unwrap_or_default()))
+                    Task::perform(action::ls(path_buf), |x| {
+                        Message::LsValue(x.unwrap_or_default())
+                    })
                 }
                 Action::Rm(vec) => {
                     println!("removing {:#?}", vec);
@@ -61,7 +67,7 @@ impl App {
                     Task::none()
                 }
             },
-            Message::Ls(mut units) => {
+            Message::LsValue(mut units) => {
                 units.sort_by_key(|x| (x.kind.clone(), x.name()));
                 self.units = units.into_iter().map(Arc::new).collect::<Vec<_>>().into();
                 Task::none()
@@ -92,7 +98,7 @@ impl App {
                     match event {
                         window::Event::Opened { .. } => {
                             Task::perform(action::ls(PathBuf::new()), |x| {
-                                Message::Ls(x.unwrap_or_default())
+                                Message::LsValue(x.unwrap_or_default())
                             })
                         }
                         _ => Task::none(),
@@ -103,11 +109,11 @@ impl App {
                     Task::none()
                 }
             },
-            Message::Select(unit) => {
+            Message::Order(Order::Select(unit)) => {
                 self.selected.push(unit);
                 Task::none()
             }
-            Message::UnSelect(unit) => {
+            Message::Order(Order::UnSelect(unit)) => {
                 self.selected.retain(|x| *x != unit);
                 Task::none()
             }
@@ -115,21 +121,24 @@ impl App {
     }
 
     fn view(&self) -> Element<Message> {
-        let ls = Button::new("Home").on_press(Message::Action(Action::Ls(PathBuf::new())));
-        let rm =
-            Button::new("rm .bash_history").on_press(Message::Action(Action::Rm(vec![Unit {
+        let ls = Button::new("Home").on_press(Message::RemoteAction(Action::Ls(PathBuf::new())));
+        let rm = Button::new("rm .bash_history").on_press(Message::RemoteAction(Action::Rm(vec![
+            Unit {
                 path: PathBuf::from_str(".bash_profile").unwrap(),
                 kind: common::UnitKind::File,
-            }])));
-        let mv = Button::new("mv .bash_history Downloads").on_press(Message::Action(Action::Mv {
-            from: vec![PathBuf::from_str(".bash_history").unwrap()],
-            to: PathBuf::from_str("Downloads").unwrap(),
-        }));
-        let cp = Button::new("cp .bash_history Downloads").on_press(Message::Action(Action::Cp {
-            from: vec![PathBuf::from_str(".bash_history").unwrap()],
-            to: PathBuf::from_str("Downloads").unwrap(),
-        }));
-        let mp4 = Button::new("mp4 record.mkv").on_press(Message::Action(Action::Mp4(vec![
+            },
+        ])));
+        let mv =
+            Button::new("mv .bash_history Downloads").on_press(Message::RemoteAction(Action::Mv {
+                from: vec![PathBuf::from_str(".bash_history").unwrap()],
+                to: PathBuf::from_str("Downloads").unwrap(),
+            }));
+        let cp =
+            Button::new("cp .bash_history Downloads").on_press(Message::RemoteAction(Action::Cp {
+                from: vec![PathBuf::from_str(".bash_history").unwrap()],
+                to: PathBuf::from_str("Downloads").unwrap(),
+            }));
+        let mp4 = Button::new("mp4 record.mkv").on_press(Message::RemoteAction(Action::Mp4(vec![
             PathBuf::from_str("record.mkv").unwrap(),
         ])));
 
@@ -176,12 +185,12 @@ impl App {
                     let block = column![icon, title].align_x(Center);
                     let on_press = if e.select_mode {
                         Some(if e.selected {
-                            Message::UnSelect(e.unit.clone())
+                            Message::Order(Order::UnSelect(e.unit.clone()))
                         } else {
-                            Message::Select(e.unit.clone())
+                            Message::Order(Order::Select(e.unit.clone()))
                         })
                     } else if matches!(e.unit.kind, UnitKind::Dirctory) {
-                        Some(Message::Action(Action::Ls(e.unit.path.clone())))
+                        Some(Message::RemoteAction(Action::Ls(e.unit.path.clone())))
                     } else {
                         None
                     };
