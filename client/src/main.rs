@@ -126,6 +126,12 @@ impl App {
     }
 
     fn view(&self) -> Element<Message> {
+        let nav_bar = self.nav_bar().wrap();
+        let units_buttons_block = self.units_buttons_block().wrap();
+        column![nav_bar, units_buttons_block].spacing(20).into()
+    }
+
+    fn nav_bar(&self) -> Row<'_, Message> {
         let ls = Button::new("Home").on_press(Message::RemoteAction(Action::Ls(PathBuf::new())));
         let rm = Button::new("rm .bash_history").on_press(Message::RemoteAction(Action::Rm(vec![
             Unit {
@@ -147,11 +153,29 @@ impl App {
             PathBuf::from_str("record.mkv").unwrap(),
         ])));
 
-        let nav_bar = row![ls, rm, mv, cp, mp4].spacing(5).wrap();
+        let nav_bar = row![ls, rm, mv, cp, mp4].spacing(5);
+        nav_bar
+    }
 
-        macro_rules! dark_icon {
-            ($is_it:expr,$name:literal) => {
-                if $is_it {
+    fn units_buttons_block(&self) -> Row<'_, Message> {
+        let units_buttons_block = self
+            .ls_units
+            .units
+            .iter()
+            .enumerate()
+            .fold(Row::new(), |row, (index, _)| {
+                row.push(self.unit_button(index))
+            })
+            .spacing(10);
+        units_buttons_block
+    }
+
+    fn unit_button(&self, index: usize) -> Button<'_, Message> {
+        let is_selected = self.ls_units.selected.contains(&index);
+        let unit = &self.ls_units.units[index];
+        macro_rules! icon_mode {
+            ($name:literal) => {
+                if is_selected {
                     concat!("../public/dark/", $name)
                 } else {
                     concat!("../public/", $name)
@@ -159,44 +183,30 @@ impl App {
             };
         }
 
-        let units = self
-            .ls_units
-            .units
-            .iter()
-            .enumerate()
-            .fold(Row::new(), |row, (index, unit)| {
-                let is_selcted = self.ls_units.selected.contains(&index);
-                row.push({
-                    let icon = Element::from(
-                        image(match unit.kind {
-                            UnitKind::Dirctory => dark_icon!(is_selcted, "directory.png"),
-                            UnitKind::Video => dark_icon!(is_selcted, "video.png"),
-                            UnitKind::Audio => dark_icon!(is_selcted, "audio.png"),
-                            UnitKind::File => dark_icon!(is_selcted, "file.png"),
-                        })
-                        .width(40)
-                        .height(40),
-                    )
-                    .explain(Color::BLACK);
-                    let title = Text::new(unit.name());
-                    let block = column![icon, title].align_x(Center);
-                    let on_press = if self.select_mode {
-                        Some(if is_selcted {
-                            Message::Order(Order::UnSelect(index))
-                        } else {
-                            Message::Order(Order::Select(index))
-                        })
-                    } else if matches!(unit.kind, UnitKind::Dirctory) {
-                        Some(Message::RemoteAction(Action::Ls(unit.path.clone())))
-                    } else {
-                        None
-                    };
-                    Button::new(block).on_press_maybe(on_press)
-                })
+        let icon = Element::from(
+            image(match unit.kind {
+                UnitKind::Dirctory => icon_mode!("directory.png"),
+                UnitKind::Video => icon_mode!("video.png"),
+                UnitKind::Audio => icon_mode!("audio.png"),
+                UnitKind::File => icon_mode!("file.png"),
             })
-            .spacing(10)
-            .wrap();
-
-        column![nav_bar, units].spacing(20).into()
+            .width(40)
+            .height(40),
+        )
+        .explain(Color::BLACK);
+        let title = Text::new(unit.name());
+        let block = column![icon, title].align_x(Center);
+        let on_press = if self.select_mode {
+            Some(if is_selected {
+                Message::Order(Order::UnSelect(index))
+            } else {
+                Message::Order(Order::Select(index))
+            })
+        } else if matches!(unit.kind, UnitKind::Dirctory) {
+            Some(Message::RemoteAction(Action::Ls(unit.path.clone())))
+        } else {
+            None
+        };
+        Button::new(block).on_press_maybe(on_press)
     }
 }
