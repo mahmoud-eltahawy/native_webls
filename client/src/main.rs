@@ -19,9 +19,14 @@ fn main() -> iced::Result {
 
 #[derive(Debug, Default)]
 struct App {
+    ls_units: LsUnits,
+    select_mode: bool,
+}
+
+#[derive(Debug, Default)]
+struct LsUnits {
     units: Box<[Arc<Unit>]>,
     selected: Vec<usize>,
-    select_mode: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +50,7 @@ impl App {
         match message {
             Message::RemoteAction(action) => match action {
                 Action::Ls(path_buf) => {
-                    self.selected.clear();
+                    self.ls_units.selected.clear();
                     Task::perform(action::ls(path_buf), |x| {
                         Message::LsValue(x.unwrap_or_default())
                     })
@@ -69,7 +74,7 @@ impl App {
             },
             Message::LsValue(mut units) => {
                 units.sort_by_key(|x| (x.kind.clone(), x.name()));
-                self.units = units.into_iter().map(Arc::new).collect::<Vec<_>>().into();
+                self.ls_units.units = units.into_iter().map(Arc::new).collect::<Vec<_>>().into();
                 Task::none()
             }
             Message::EventOccurred(event) => match event {
@@ -109,12 +114,12 @@ impl App {
                     Task::none()
                 }
             },
-            Message::Order(Order::Select(unit)) => {
-                self.selected.push(unit);
+            Message::Order(Order::Select(index)) => {
+                self.ls_units.selected.push(index);
                 Task::none()
             }
-            Message::Order(Order::UnSelect(unit)) => {
-                self.selected.retain(|x| *x != unit);
+            Message::Order(Order::UnSelect(index)) => {
+                self.ls_units.selected.retain(|x| *x != index);
                 Task::none()
             }
         }
@@ -144,13 +149,6 @@ impl App {
 
         let nav_bar = row![ls, rm, mv, cp, mp4].spacing(5).wrap();
 
-        struct UnitElement {
-            unit: Arc<Unit>,
-            index: usize,
-            selected: bool,
-            select_mode: bool,
-        }
-
         macro_rules! dark_icon {
             ($is_it:expr,$name:literal) => {
                 if $is_it {
@@ -162,38 +160,34 @@ impl App {
         }
 
         let units = self
+            .ls_units
             .units
             .iter()
             .enumerate()
-            .map(|(i, x)| UnitElement {
-                unit: x.clone(),
-                index: i,
-                selected: self.selected.contains(&i),
-                select_mode: self.select_mode,
-            })
-            .fold(Row::new(), |row, e| {
+            .fold(Row::new(), |row, (index, unit)| {
+                let is_selcted = self.ls_units.selected.contains(&index);
                 row.push({
                     let icon = Element::from(
-                        image(match e.unit.kind {
-                            UnitKind::Dirctory => dark_icon!(e.selected, "directory.png"),
-                            UnitKind::Video => dark_icon!(e.selected, "video.png"),
-                            UnitKind::Audio => dark_icon!(e.selected, "audio.png"),
-                            UnitKind::File => dark_icon!(e.selected, "file.png"),
+                        image(match unit.kind {
+                            UnitKind::Dirctory => dark_icon!(is_selcted, "directory.png"),
+                            UnitKind::Video => dark_icon!(is_selcted, "video.png"),
+                            UnitKind::Audio => dark_icon!(is_selcted, "audio.png"),
+                            UnitKind::File => dark_icon!(is_selcted, "file.png"),
                         })
                         .width(40)
                         .height(40),
                     )
                     .explain(Color::BLACK);
-                    let title = Text::new(e.unit.name());
+                    let title = Text::new(unit.name());
                     let block = column![icon, title].align_x(Center);
-                    let on_press = if e.select_mode {
-                        Some(if e.selected {
-                            Message::Order(Order::UnSelect(e.index))
+                    let on_press = if self.select_mode {
+                        Some(if is_selcted {
+                            Message::Order(Order::UnSelect(index))
                         } else {
-                            Message::Order(Order::Select(e.index))
+                            Message::Order(Order::Select(index))
                         })
-                    } else if matches!(e.unit.kind, UnitKind::Dirctory) {
-                        Some(Message::RemoteAction(Action::Ls(e.unit.path.clone())))
+                    } else if matches!(unit.kind, UnitKind::Dirctory) {
+                        Some(Message::RemoteAction(Action::Ls(unit.path.clone())))
                     } else {
                         None
                     };
